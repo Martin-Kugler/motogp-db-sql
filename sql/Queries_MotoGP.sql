@@ -1,8 +1,24 @@
 -- QUERIES MOTOGP --
 
-USE motogp_db
+USE motogp_db;
 
+-- 1 --
 
+-- Nombre y apellidos del piloto que ha resultado campeón del mundo del año más reciente de la 
+-- base de datos en la categoría MotoGP
+
+SELECT r.first_name, r.last_name
+FROM (SELECT re.id_rider, ra.year, SUM(points) as suma
+		FROM results re JOIN races ra ON re.id_race = ra.id_race
+        WHERE ra.id_category = "MotoGP" AND ra.year = (SELECT MAX(ra.year) FROM races ra WHERE ra.id_category = "MotoGP")
+        GROUP BY re.id_rider, ra.year
+        HAVING SUM(re.points) > 0) as total_points
+JOIN riders r ON total_points.id_rider = r.id_rider
+WHERE suma >= ALL (SELECT SUM(re.points) 
+					FROM results re JOIN races ra ON re.id_race = ra.id_race
+					WHERE ra.id_category = "MotoGP" AND ra.year= (SELECT MAX(ra.year) FROM races ra WHERE ra.id_category = "MotoGP")
+					GROUP BY re.id_rider, ra.year
+					HAVING SUM(re.points) > 0);
 
 -- 2 --
 
@@ -27,8 +43,17 @@ HAVING count_riders >= ALL(
 	GROUP BY r2.id_country
 );
 
+-- 3 --
 
+-- Nombre y apellidos de los pilotos que han ganado carreras en las categorías de MotoGP, Moto2 y Moto 3
 
+SELECT DISTINCT r.first_name, r.last_name
+FROM riders r
+	INNER JOIN results re ON re.id_rider = r.id_rider
+    INNER JOIN races ra ON ra.id_race = re.id_race
+WHERE (ra.id_category = "MotoGP" OR ra.id_category = "Moto2" OR ra.id_category = "Moto3") 
+   AND re.position = 1;
+   
 -- 4 --
 
 -- Nombre y apellidos de los pilotos que, habiendo sido campeones del mundo en la categoríaa Moto2
@@ -61,7 +86,37 @@ WHERE id_rider IN (SELECT id_rider FROM Champions WHERE id_category = 'Moto2')
   AND id_rider IN (SELECT id_rider FROM Champions WHERE id_category = 'Moto3')
   AND id_rider NOT IN (SELECT id_rider FROM Champions WHERE id_category = 'MotoGP');  
 
+-- 5 --
 
+-- Nombre de los equipos y número de veces en las que alguno de los pilotos ha ganado un mundial en la categoría
+-- MotoGP ordenado de mayor a menor número de victorias
+
+SELECT t.team_name, COUNT(*) AS wins
+FROM (SELECT p.id_rider, p.year, p.total_points
+	FROM (SELECT re.id_rider, ra.year, SUM(points) AS total_points 
+			FROM results re JOIN races ra ON re.id_race = ra.id_race
+			WHERE ra.id_category = "MotoGP" 
+			GROUP BY id_rider, ra.year
+			HAVING SUM(re.points) > 0) as p
+	WHERE p.total_points >= ALL (SELECT SUM(points) as total_points
+								FROM results re JOIN races ra ON re.id_race = ra.id_race
+								WHERE ra.id_category = "MotoGP"  AND ra.year = p.year
+								GROUP BY id_rider, ra.year
+								HAVING SUM(re.points) > 0)) as champions
+	INNER JOIN (SELECT x.id_rider, x.year, x.id_team, x.team_points
+				FROM (SELECT re.id_rider, ra.year, re.id_team, SUM(re.points) as team_points
+					  FROM results re JOIN races ra ON re.id_race = ra.id_race
+                      WHERE ra.id_category = "MotoGP"
+                      GROUP BY re.id_rider, ra.year, re.id_team) as x
+				WHERE x.team_points >= ALL(SELECT SUM(re.points) as team_points
+										   FROM results re
+                                           JOIN races ra ON re.id_race = ra.id_race
+                                           WHERE ra.id_category = "MotoGP" AND ra.year = x.year AND re.id_rider = x.id_rider
+                                           GROUP BY re.id_team)) as champ_team
+				ON champ_team.id_rider = champions.id_rider AND champ_team.year = champions.year
+	INNER JOIN teams t ON t.id_team = champ_team.id_team
+    GROUP BY t.id_team, t.team_name
+    ORDER BY wins DESC;
 
 -- 6 -- 
 
