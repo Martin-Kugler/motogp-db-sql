@@ -51,8 +51,10 @@ SELECT DISTINCT r.first_name, r.last_name
 FROM riders r
 	INNER JOIN results re ON re.id_rider = r.id_rider
     INNER JOIN races ra ON ra.id_race = re.id_race
-WHERE (ra.id_category = "MotoGP" OR ra.id_category = "Moto2" OR ra.id_category = "Moto3") 
-   AND re.position = 1;
+WHERE ra.id_category IN ("MotoGP", "Moto2", "Moto3") 
+   AND re.position = 1
+GROUP BY r.id_rider
+HAVING COUNT(DISTINCT ra.id_category) = 3;
    
 -- 4 --
 
